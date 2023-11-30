@@ -4,6 +4,7 @@ import datetime
 #from sklearn import datasets
 import altair as alt
 import xmlrpc.client as client
+import plotly.express as px
 
 server = client.ServerProxy("http://localhost:8012/RPC2")
 
@@ -13,44 +14,51 @@ st.write("""
 st.sidebar.title("Фильтры")
 
 st.sidebar.header('Дата', divider=True)
-start_date = datetime.date.today() - datetime.timedelta(days=1)
-start_date = st.sidebar.date_input(label="Начальная", value=start_date)
+start_date = datetime.date.today()# - datetime.timedelta(days=1)
+start_date = st.sidebar.date_input(label="С", value=start_date)
 tmp = start_date + datetime.timedelta(days=1)
-end_date = st.sidebar.date_input(label="Конечная", min_value=tmp, value=tmp)
+end_date = st.sidebar.date_input(label="До", min_value=tmp, value=tmp)
 
 st.sidebar.header('Фильтры')
-data_length = st.sidebar.slider('Глубина анализа, день', 1, 30, 3)
 interval_width = st.sidebar.slider('Интервал анализа, час', 1, 24, 4)
 proc_type = st.sidebar.text_input("Тип операции")
-data = {'data_length': data_length,
-        'interval_width': interval_width,
-        'proc_type': proc_type}
-features = pd.DataFrame(data, index=[0])
 
 with st.spinner('Загрузка...'):
     proc_type = [] if proc_type == "" else [proc_type]
+    print(proc_type)
     data = pd.read_json(server.slice_log(proc_type, start_date.strftime("%Y-%m-%d %H:%M:%S"), end_date.strftime("%Y-%m-%d %H:%M:%S"), 0.0, 30000.0))
 
-    chart = alt.Chart(data).mark_bar().encode(
-        x='action_name',
-        y='count()',
-    ).interactive()
+    fig1 = px.histogram(data, x='action_name', width=800, height=400)
+    fig1.update_layout(
+        title_text="Гистограмма",
+        xaxis_title_text="Тип операции",
+        yaxis_title_text="Количество",
+        bargap=0.02,  # Промежуток между столбцами
+        bargroupgap=0.1,  # Промежуток между группами столбцов
+    )
 
-    chart2 = alt.Chart(data).mark_bar().encode(
-        x=alt.X('date:T', title='Дата', bin=alt.Bin(maxbins=24/interval_width, ), axis=alt.Axis(format='%Y-%m-%d %H:%M:%S')),
-        y='count()',
-    ).interactive()
+    fig2 = px.histogram(data, x='date', nbins=int(24/interval_width), width=800, height=400)
+    fig2.update_layout(
+        title_text="Гистограмма",
+        xaxis_title_text="Даты",
+        yaxis_title_text="Количество",
+        bargap=0.02,  # Промежуток между столбцами
+        bargroupgap=0.1,  # Промежуток между группами столбцов
+    )
 
-    tab1, tab2 = st.tabs(["Количество операций по типу", "asdas"])
-    with tab1:
-        st.altair_chart(chart, theme="streamlit", use_container_width=True)
-    with tab1:
-        st.altair_chart(chart2, theme="streamlit", use_container_width=True)
+    # Создаем круговую диаграмму с использованием plotly
+    fig3 = px.pie(data, names='action_name', title='Соотношение количества зопросов по типу')
+    fig4 = px.pie(data, names='action_name', values="duration", title='Соотношение времени запросов по типу')
+
+    st.plotly_chart(fig1)
+    st.plotly_chart(fig2)
+    st.plotly_chart(fig3)
+    st.plotly_chart(fig4)
 
     st.subheader('Все данные лог-файлов')
-    st.write()
+    st.write(pd.read_json(server.slice_log()))
 
     st.subheader('Отобранные данные лог-файлов')
-    st.write([])
+    st.write(data)
 
 st.success('Done!')
